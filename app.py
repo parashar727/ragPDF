@@ -13,6 +13,9 @@ from langchain_classic.chains import create_retrieval_chain, create_history_awar
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain_experimental.text_splitter import SemanticChunker
+from langchain_classic.retrievers import ContextualCompressionRetriever
+from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
 
 st.set_page_config(page_title="Document Q&A Bot using RAG", layout="wide")
 st.title("RAG-Docs")
@@ -43,26 +46,34 @@ def process_files(files):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
+    embeddings = OllamaEmbeddings(model="bge-m3:latest")
+    
     # Splitting the text
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    splits = text_splitter.split_documents(all_docs)
+    text_splitter = SemanticChunker(embeddings=embeddings, breakpoint_threshold_type="percentile", breakpoint_threshold_amount=0.9)
+    splits = text_splitter.create_documents([doc.page_content for doc in all_docs])
 
     # Hybrid Search
-    embeddings = OllamaEmbeddings(model="bge-m3:latest")
     vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
-    faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+    faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
 
     # Sparse Retriever
     bm25_retriever = BM25Retriever.from_documents(splits)
-    bm25_retriever.k = 2
+    bm25_retriever.k = 4
 
     # Combining them
     ensemble_retriever = EnsembleRetriever(
         retrievers=[faiss_retriever, bm25_retriever],
-        weights=[0.5, 0.5]
+        weights=[0.7, 0.3]
     )
 
-    return ensemble_retriever
+    compressor = FlashrankRerank()
+
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor,
+        base_retriever=ensemble_retriever
+    )
+
+    return compression_retriever
 
 # Sidebar to upload files
 with st.sidebar:
