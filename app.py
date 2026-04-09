@@ -14,8 +14,8 @@ from langchain_classic.chains.combine_documents import create_stuff_documents_ch
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 
-st.set_page_config(page_title="RAG Pro: Hybrid Search + Memory", layout="wide")
-st.title("Professional RAG (Llama 3.2 + Hybrid Search)")
+st.set_page_config(page_title="Document Q&A Bot using RAG", layout="wide")
+st.title("RAG-Docs")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []  # To store chat history
@@ -48,7 +48,7 @@ def process_files(files):
     splits = text_splitter.split_documents(all_docs)
 
     # Hybrid Search
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    embeddings = OllamaEmbeddings(model="bge-m3:latest")
     vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
     faiss_retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
@@ -94,7 +94,7 @@ if user_input := st.chat_input("Ask about your documents..."):
     if st.session_state.retriever is None:
         st.error("Please upload and process documents first.")
     else:
-        llm = ChatOllama(model="llama3.2:3b", temperature=0.2)
+        llm = ChatOllama(model="alibayram/smollm3:latest", temperature=0.2, num_gpu=1)
 
         # History Aware Retriever
         contextualize_q_system_prompt = (
